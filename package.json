@@ -1,0 +1,21 @@
+{
+   "name": "ctrlfreq-node",
+      "version": "0.0.1",
+      "description": "node ctrlfreq",
+      "keywords": [
+      "network"
+         ],
+      "author": {
+         "name": "John Aughey",
+         "email": "jha@aughey.com"
+      },
+
+      "dependencies": {
+         "q": ">= 0.9.6",
+	 "file": "> 0.0.1",
+	 "glob": "> 0.0.1",
+         "underscore": ">= 0.1",
+         "levelup": ">= 0.1",
+         "leveldown": ">= 0.1"
+      }
+}
