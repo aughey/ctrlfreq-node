@@ -9,7 +9,7 @@ var levelup = require('levelup');
 var dbpath = "./db/chunks";
 var db = levelup(dbpath);
 
-function limit(count) {
+function limit(count, dm) {
 	var waiting = [];
 
 	function whendone() {
@@ -23,22 +23,28 @@ function limit(count) {
 		}
 		var next = waiting.shift();
 		count--;
-		next.resolve(function(data) {
+		var deferred = next[0];
+		var cb = next[1];
+		cb(function(data) {
 			count++;
 			runnext();
-			return data;
+			deferred.resolve(data);
 		});
 	}
 
 	return function(debugmessage) {
-		var deferred = Q.defer();
-		waiting.push(deferred);
-		if (count > 0) {
-			runnext();
-		} else {
-			console.log("Rate limiting: " + debugmessage)
+		return {
+			then: function(cb) {
+				var deferred = Q.defer();
+				waiting.push([deferred, cb]);
+				if (count > 0) {
+					runnext();
+				} else {
+					console.log("Rate limiting: " + dm + ":" + debugmessage)
+				}
+				return deferred.promise;
+			}
 		}
-		return deferred.promise;
 	}
 }
 
@@ -52,6 +58,7 @@ function storechunk(buffer) {
 		db.put(digest, buffer, function(err) {
 			if (err) {
 				console.log("Error writing sha to database: " + err);
+				process.exit(1);
 				deferred.resolve(null);
 				return;
 			}
@@ -64,37 +71,47 @@ function storechunk(buffer) {
 	return deferred.promise;
 }
 
-var filelimit = limit(10);
-var readlimit = limit(10);
+var dirlimit = limit(10, "dirlimit");
+var filelimit = limit(10, "filelimit");
+var readlimit = limit(100, "readlimit");
 
 function processfile(fullpath) {
-	return filelimit(fullpath).then(function(done) {
+	return filelimit(fullpath).then(function(filedone) {
 		fs.open(fullpath, 'r', function(err, fd) {
 			if (err) {
-				done(null);
+				filedone(null);
 				return;
 			}
 			var chunks = [];
-			console.log(fullpath);
+
+			var outstanding = 1;
 
 			function readnext() {
 				var size = 1048576;
 				var buffer = new Buffer(size);
-				var outstanding = 0;
+
+				function checkdone(error) {
+					outstanding -= 1;
+					if (outstanding == 0) {
+						console.log("file done: " + fullpath);
+						filedone(error ? null : chunks);
+					}
+				}
+				//console.log("Trying to read from: " + fullpath)
 				readlimit("Buffer").then(function(bufferdone) {
 					fs.read(fd, buffer, 0, size, null, function(err, bytesread, buffer) {
-						//console.log("Reading " + fullpath + " " + bytesread)
+						console.log("Reading " + fullpath + " " + bytesread)
 						if (err) {
 							console.log("Error reading from " + fullpath);
-							bufferdone();
-							done(null);
 							fs.close(fd);
+							bufferdone();
+							checkdone(true);
 							return;
 						}
 						if (bytesread == 0) {
 							fs.close(fd);
 							bufferdone();
-							done(chunks);
+							checkdone();
 							return;
 						}
 						buffer = buffer.slice(0, bytesread);
@@ -103,11 +120,8 @@ function processfile(fullpath) {
 						outstanding += 1;
 						storechunk(buffer).then(function(sha) {
 							chunks[index] = sha;
-							outstanding -= 1;
-							if (outstanding == 0) {
-								bufferdone();
-								done(chunks);
-							}
+							bufferdone();
+							checkdone();
 						});
 						readnext();
 					})
@@ -122,68 +136,72 @@ function processfile(fullpath) {
 
 function processdir(dirname) {
 	console.log("reading dir: " + dirname)
-	var deferred = Q.defer();
-	fs.readdir(dirname, function(err, dirfiles) {
-		if (err) {
-			console.log("Error reading " + dirname + ": " + err);
-			deferred.resolve(null);
-			return;
-		}
-		var stats = [];
-		var files = [];
-		var dirs = [];
-		_.each(dirfiles, function(file) {
-			var fullpath = path.join(dirname, file);
+	return dirlimit(dirname).then(function(dirdone) {
+		fs.readdir(dirname, function(err, dirfiles) {
+			if (err) {
+				console.log("Error reading " + dirname + ": " + err);
+				dirdone(null);
+				return;
+			}
+			var stats = [];
+			var files = [];
+			var dirs = [];
+			_.each(dirfiles, function(file) {
+				var fullpath = path.join(dirname, file);
 
-			try {
-				stats.push(Q.nfcall(fs.stat, fullpath).then(function(stat) {
-					if (err) {
-						console.log("Could not stat: " + fullpath)
-						return;
-					}
-					if (stat.isFile()) {
-						files.push(processfile(fullpath).then(function(chunks) {
-							return {
-								name: file,
-								stat: stat,
-								chunks: chunks
-							}
-						}));
-					} else if (stat.isDirectory()) {
-						dirs.push(processdir(fullpath).then(function(dirinfo) {
-							return storechunk(JSON.stringify(dirinfo)).then(function(sha) {
+				try {
+					stats.push(Q.nfcall(fs.stat, fullpath).then(function(stat) {
+						if (err) {
+							console.log("Could not stat: " + fullpath)
+							return;
+						}
+						if (stat.isFile()) {
+							files.push(processfile(fullpath).then(function(chunks) {
 								return {
 									name: file,
 									stat: stat,
-									sha: sha
-								};
-							});
-						}));
-					}
-				}));
-			} catch (e) {
-				console.log("Exception on file: " + fullpath);
-				console.log(e);
-			}
-		});
-		Q.all(stats).then(function() {
-			Q.all(files).then(function(files) {
-				Q.all(dirs).then(function(dirs) {
-					deferred.resolve({
-						dirs: dirs,
-						files: files
-					});
+									chunks: chunks
+								}
+							}));
+						} else if (stat.isDirectory()) {
+							dirs.push(processdir(fullpath).then(function(dirinfo) {
+								return storechunk(JSON.stringify(dirinfo)).then(function(sha) {
+									return {
+										name: file,
+										stat: stat,
+										sha: sha
+									};
+								});
+							}));
+						}
+					}));
+				} catch (e) {
+					console.log("Exception on file: " + fullpath);
+					console.log(e);
+
+				}
+			});
+			console.log(dirname + " Waiting on stats: " + stats.length);
+			Q.all(stats).then(function() {
+				console.log(dirname + " Waiting on files: " + files.length);
+				Q.all(files).then(function(files) {
+					console.log(dirname + " Waiting on dirs: " + dirs.length);
+					Q.all(dirs).then(function(dirs) {
+						console.log("done with " + dirname)
+						dirdone({
+							dirs: dirs,
+							files: files
+						});
+					}).done()
 				}).done()
 			}).done()
-		}).done()
-	});
-	return deferred.promise;
+		});
+	})
 }
 
 var args = process.argv;
 args.shift()
 args.shift()
-console.log(args);
 _.each(args, function(dirpath) {
 	processdir(dirpath).then(function(result) {
 		console.log("done processing")
@@ -197,5 +215,5 @@ _.each(args, function(dirpath) {
 				})
 			});
 		});
-	});
+	}).done();
 });
