@@ -16,6 +16,7 @@ function numberWithCommas(x) {
 
 var chunkcount = 0;
 var filecount = 0;
+var cachecount = 0;
 var dircount = 0;
 var bytecount = 0;
 var chunkwrite = 0;
@@ -83,7 +84,7 @@ function isChunkStored(key, cb) {
 	iterator.next(function(err, ikey) {
 		iterator.end(noop);
 		if (!ikey) {
-			return;
+			cb(false);
 		}
 		if (ikey == key) {
 			cb(true);
@@ -106,6 +107,7 @@ function storechunk(buffer, precomputedkey, debug) {
 
 	chunkcount++;
 	bytecount += buffer.length;
+
 
 	//deferred.resolve(digest);
 	//return deferred.promise;
@@ -139,9 +141,37 @@ var dirlimit = limit(10, "dirlimit");
 var filelimit = limit(10, "filelimit");
 var readlimit = limit(100, "readlimit");
 
-function processfile(fullpath) {
+try {
+	var filecache = JSON.parse(fs.readFileSync("cache.json"));
+	console.log("Loaded filecache")
+} catch(e) {
+	var filecache = {};
+}
+var newcache = {};
+
+function processfile(fullpath,filename,stat) {
+	filecount++;
+	var cache = filecache[fullpath];
+	if(cache) {
+		//console.log(cache.mtime + " " + stat.mtime.toISOString())
+		//console.log(JSON.stringify(stat));
+
+		if(_.isEqual(stat,cache)) {
+			cachecount++;
+			newcache[fullpath] = cache;
+			return Q.fcall(function() {
+				return cache.chunks;
+			});
+		}
+	}
+	return processfile_full(fullpath).then(function(chunks) {
+		newcache[fullpath] = stat;
+		return chunks;
+	});
+}
+
+function processfile_full(fullpath) {
 	return filelimit(fullpath).then(function(filedone) {
-		filecount++;
 		fs.open(fullpath, 'r', function(err, fd) {
 			if (err) {
 				filedone(null);
@@ -165,7 +195,7 @@ function processfile(fullpath) {
 				//console.log("Trying to read from: " + fullpath)
 				readlimit("Buffer").then(function(bufferdone) {
 					fs.read(fd, buffer, 0, size, null, function(err, bytesread, buffer) {
-						//console.log("Reading " + fullpath + " " + bytesread)
+						//fconsole.log("Reading " + fullpath + " " + bytesread)
 						if (err) {
 							console.log("Error reading from " + fullpath);
 							fs.close(fd);
@@ -202,7 +232,7 @@ function processfile(fullpath) {
 
 
 function processdir(dirname) {
-	console.log("reading dir: " + dirname)
+	//console.log("reading dir: " + dirname)
 	// We return our own promise
 	var deferred = Q.defer();
 	dirlimit(dirname).then(function(dirdone) {
@@ -222,12 +252,13 @@ function processdir(dirname) {
 				try {
 					stats.push(Q.nfcall(fs.stat, fullpath).then(function(stat) {
 						var storestat = _.pick(stat,'mode','uid','gid','size','mtime')
+						storestat.mtime = storestat.mtime.toISOString();
 						if (err) {
 							console.log("Could not stat: " + fullpath)
 							return;
 						}
 						if (stat.isFile()) {
-							files.push(processfile(fullpath).then(function(chunks) {
+							files.push(processfile(fullpath,file,storestat).then(function(chunks) {
 								return {
 									name: file,
 									stat: storestat,
@@ -280,6 +311,7 @@ Q.nfcall(levelup, dbpath).then(function(d) {
 	db = d; // Setting the global db
 	return Q.all(_.map(args, function(dirpath) {
 		console.log("Kicking off processing: " + dirpath)
+		dirpath = path.resolve(dirpath);
 		return processdir(dirpath).then(function(result) {
 			console.log("done processing directory: " + dirpath)
 			var info = JSON.stringify(result, dirpath);
@@ -293,13 +325,14 @@ Q.nfcall(levelup, dbpath).then(function(d) {
 	console.log("Database closed")
 	//return Q.ninvoke(levelup, 'repair', dbpath);
 }).then(function() {
-	console.log("Database " + dbpath + " compacted.")
 	console.log("Directory Count: " + numberWithCommas(dircount));
 	console.log("File Count: " + numberWithCommas(filecount));
+	console.log("Cache Hits: " + numberWithCommas(cachecount));
 	console.log("Chunk Count: " + numberWithCommas(chunkcount));
 	console.log("Byte Count: " + numberWithCommas(bytecount));
 	console.log("Chunks Written: " + numberWithCommas(chunkwrite));
 	console.log("Bytes Written: " + numberWithCommas(bytewrite));
+	fs.writeFileSync('cache.json',JSON.stringify(newcache));
 }).fail(function(err) {
 	console.log("FAILED: " + err);
 }).done();
