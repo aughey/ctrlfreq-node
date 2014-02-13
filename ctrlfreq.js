@@ -156,7 +156,7 @@ function processfile(fullpath,filename,stat) {
 		//console.log(cache.mtime + " " + stat.mtime.toISOString())
 		//console.log(JSON.stringify(stat));
 
-		if(_.isEqual(stat,cache)) {
+		if(_.isEqual(stat,cache.stat)) {
 			cachecount++;
 			newcache[fullpath] = cache;
 			return Q.fcall(function() {
@@ -165,7 +165,10 @@ function processfile(fullpath,filename,stat) {
 		}
 	}
 	return processfile_full(fullpath).then(function(chunks) {
-		newcache[fullpath] = stat;
+		newcache[fullpath] = {
+			stat: stat,
+			chunks: chunks
+		};
 		return chunks;
 	});
 }
