@@ -165,11 +165,11 @@ function init(store) {
 				}
 				readnext();
 			});
-		})
-	}
+})
+}
 
 
-	function processdir(dirname) {
+function processdir(dirname) {
 		// We return our own promise
 		var deferred = Q.defer();
 		dirlimit(dirname).then(function(dirdone) {
@@ -241,14 +241,14 @@ function init(store) {
 					}).done()
 				}).done()
 			});
-		})
-		return deferred.promise;
-	}
+})
+return deferred.promise;
+}
 
-	return {
-		processdir: processdir,
-		emitter: emitter
-	}
+return {
+	processdir: processdir,
+	emitter: emitter
+}
 }
 
 function standalone() {
@@ -295,5 +295,8 @@ module.exports = {
 			emitter: bk.emitter,
 			promise: promise
 		}
+	},
+	saveCache: function() {
+		fs.writeFileSync('cache.json', JSON.stringify(newcache));
 	}
 }

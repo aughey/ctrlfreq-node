@@ -27,4 +27,5 @@ leveldbstore.store(dbpath).then(function(store) {
 	});
 }).then(function() {
 	console.log("db closed");
+	ctrlfreq.saveCache();
 }).done();
