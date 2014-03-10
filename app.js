@@ -1,18 +1,22 @@
 var ctrlfreq = require('./ctrlfreq');
 var leveldbstore = require('./leveldb_store');
+var nullstore = require('./null_store');
+var ss = require('./segmented_store')
 var _ = require('underscore')
 var Q = require('q');
 
 var levelup = require('levelup');
 
-var dbpath = "./db/chunks";
+var dbpath = "./db/segmented";
 
 var args = process.argv;
 args.shift()
 args.shift()
 
+var storetouse = ss;
+
 var backups = [];
-leveldbstore.store(dbpath).then(function(store) {
+storetouse.create(dbpath).then(function(store) {
 	_.each(args, function(dir) {
 		console.log("Backing up " + dir);
 		var backup = ctrlfreq.backup(dir, store)

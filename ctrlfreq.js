@@ -67,6 +67,7 @@ function limit(count, dm) {
 }
 
 try {
+	throw new Error('');
 	var filecache = JSON.parse(fs.readFileSync("cache.json"));
 	console.log("Loaded filecache")
 } catch (e) {
@@ -97,7 +98,7 @@ function init(store) {
 				});
 			}
 		}
-		return processfile_full(fullpath,stat).then(function(chunks) {
+		return processfile_full(fullpath, stat).then(function(chunks) {
 			newcache[fullpath] = {
 				stat: stat,
 				chunks: chunks
@@ -106,9 +107,9 @@ function init(store) {
 		});
 	}
 
-	function processfile_full(fullpath,stat) {
+	function processfile_full(fullpath, stat) {
 		return filelimit(fullpath).then(function(filedone) {
-			emitter.emit('file',fullpath);
+			emitter.emit('file', fullpath);
 			fs.open(fullpath, 'r', function(err, fd) {
 				if (err) {
 					filedone(null);
@@ -146,13 +147,13 @@ function init(store) {
 								checkdone();
 								return;
 							}
-							emitter.emit("filechunk",fullpath,bytesread,stat.size);
+							emitter.emit("filechunk", fullpath, bytesread, stat.size);
 							buffer = buffer.slice(0, bytesread);
 							var unlog = bytecheck(buffer.length);
 							var index = chunks.length;
 							chunks.push(null);
 							outstanding += 1;
-							store.storechunk(buffer, null, fullpath).then(function(sha) {
+							store.save(buffer, null, fullpath).then(function(sha) {
 								unlog();
 								chunks[index] = sha;
 								bufferdone();
@@ -163,18 +164,19 @@ function init(store) {
 					})
 
 				}
+
 				readnext();
 			});
-})
-}
+		});
+	}
 
 
-function processdir(dirname) {
+	function processdir(dirname) {
 		// We return our own promise
 		var deferred = Q.defer();
 		dirlimit(dirname).then(function(dirdone) {
 			dircount++;
-			emitter.emit('dir',dirname);
+			emitter.emit('dir', dirname);
 			fs.readdir(dirname, function(err, dirfiles) {
 				if (err) {
 					console.log("Error reading " + dirname + ": " + err);
@@ -207,7 +209,7 @@ function processdir(dirname) {
 								delete storestat.size;
 								delete storestat.mtime;
 								dirs.push(processdir(fullpath).then(function(dirinfo) {
-									return store.storechunk(JSON.stringify(dirinfo), null, "Directory " + fullpath).then(function(sha) {
+									return store.save(JSON.stringify(dirinfo), null, "Directory " + fullpath).then(function(sha) {
 										return {
 											name: file,
 											stat: storestat,
@@ -241,14 +243,14 @@ function processdir(dirname) {
 					}).done()
 				}).done()
 			});
-})
-return deferred.promise;
-}
+		})
+		return deferred.promise;
+	}
 
-return {
-	processdir: processdir,
-	emitter: emitter
-}
+	return {
+		processdir: processdir,
+		emitter: emitter
+	}
 }
 
 function standalone() {
@@ -264,7 +266,7 @@ function standalone() {
 			return processdir(dirpath).then(function(result) {
 				console.log("done processing directory: " + dirpath)
 				var info = JSON.stringify(result, dirpath);
-				return storechunk(info, null, "Top directory " + dirpath);
+				return save(info, null, "Top directory " + dirpath);
 			});
 		}));
 	}).then(function() {

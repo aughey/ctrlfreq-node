@@ -1,5 +1,5 @@
 var levelup = require('levelup');
-var crypto = require('crypto');
+var hash = require('./hash');
 
 var Q = require('q');
 
@@ -33,15 +33,13 @@ function createstore(db) {
 		})
 	}
 
-	function storechunk(buffer, precomputedkey, debug) {
+	function save(buffer, precomputedkey, debug) {
 		var deferred = Q.defer();
 
 		if (precomputedkey) {
 			var digest = precomputedkey;
 		} else {
-			var shasum = crypto.createHash('sha1');
-			shasum.update(buffer);
-			var digest = shasum.digest('hex');
+			var digest = hash.hash(buffer);
 		}
 
 		chunkcount++;
@@ -78,7 +76,7 @@ function createstore(db) {
 
 	console.log("Returning opened store");
 	return {
-		storechunk: storechunk,
+		save: save,
 		close: function() {
 			return Q.ninvoke(db, 'close');
 		}
@@ -86,7 +84,7 @@ function createstore(db) {
 }
 
 module.exports = {
-	store: function(dbpath) {
+	create: function(dbpath) {
 		console.log("Creating store at " + dbpath);
 		return Q.nfcall(levelup, dbpath).then(createstore);
 	}
