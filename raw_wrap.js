@@ -14,12 +14,10 @@ function create(shadb, raw) {
 			}
 			return shadb.has(digest).then(function(doeshave) {
 				if(doeshave) {
-					return true;
+					return digest;
 				} else {
 					return raw.save_raw(digest,buffer).then(function(rawkey) {
 						return shadb.put(digest,rawkey);
-					}).then(function() {
-						return digest;
 					});
 				}
 			});
