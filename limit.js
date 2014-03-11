@@ -18,7 +18,7 @@ function limit(count, dm) {
 				process.nextTick(runnext);
 			}
 			deferred.resolve(data);
-		});
+		}, deferred);
 	}
 
 	return function(debugmessage) {

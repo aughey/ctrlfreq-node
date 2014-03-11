@@ -1,4 +1,3 @@
-//var fs = require('fs');
 var Q = require('q');
 var path = require('path');
 var limit = require('./limit');
@@ -9,16 +8,22 @@ function create(dir) {
 
 	return Q.fcall(function() {
 		var file = null;
+		var curpos = null;
 
 		function open() {
 			var deferred = Q.defer();
-			if(!file) {
-				var fullpath = path.join(dir,'data.raw');
+			if (!file) {
+				var fullpath = path.join(dir, 'data.raw');
 				console.log("Opening " + fullpath);
-				file = fs.createWriteStream(fullpath, {flags: 'a'});
+				file = fs.createWriteStream(fullpath, {
+					flags: 'a'
+				});
 				file.once('open', function(fd) {
 					console.log("opened");
-					deferred.resolve(file);
+					fs.fstat(fd,function(err,stats) {
+						deferred.resolve(file);
+						curpos = stats.size;
+					})
 				});
 			} else {
 				deferred.resolve(file);
@@ -29,20 +34,19 @@ function create(dir) {
 		return {
 			save_raw: function(key, buffer) {
 				return l().then(function(done) {
-					return open().then(function(stream) {
-						console.log("writing");
-						var pos = fs.seekSync(stream.fd,0,2);
-						console.log(pos);
-						return Q.ninvoke(stream,'write',buffer).then(function(a) {
-							console.log("returning " + pos);
+					open().then(function(stream) {
+						var pos = curpos;
+						curpos += buffer.length;
+
+						stream.write(buffer,function() {
 							done(pos.toString());
 						});
-					});
+					}).done(); // (this done is correct because of how limit works)
 				});
 			},
 			close: function() {
-				if(file) {
-					return Q.ninvoke(file,'end');
+				if (file) {
+					return Q.ninvoke(file, 'end');
 				} else {
 					return Q.fcall(function() {
 
