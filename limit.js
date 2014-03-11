@@ -1,16 +1,19 @@
+var Q = require('q');
+
 function limit(count, dm) {
 	var waiting = [];
 
 	function runnext() {
-		if (waiting.length == 0) {
+		if (waiting.length === 0) {
 			return;
 		}
 		var next = waiting.shift();
 		var deferred = next[0];
 		var cb = next[1];
 		cb(function(data) {
+			//console.log("Rate limit done: " + dm + " " + waiting.length)
 			count++;
-			if (waiting.length != 0) {
+			if (waiting.length !== 0) {
 				count--;
 				process.nextTick(runnext);
 			}
@@ -27,14 +30,14 @@ function limit(count, dm) {
 					count--;
 					process.nextTick(runnext);
 				} else {
-					console.log("Rate limiting: " + dm + ":" + debugmessage)
+					//console.log("Rate limiting: " + dm + ":" + debugmessage + " " + waiting.length)
 				}
 				return deferred.promise;
 			}
-		}
-	}
+		};
+	};
 }
 
-modules.exports {
+module.exports = {
 	limit: limit
-}
+};
