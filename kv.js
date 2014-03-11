@@ -24,11 +24,11 @@ module.exports = {
 						}
 					});
 				},
-				put: function(key,value,cb) {
-					db.put(key, value, cb);
+				put: function(key,value) {
+					return Q.ninvoke(db,'put',key,value);
 				},
-				get: function(key,cb) {
-					db.get(key,cb);
+				get: function(key) {
+					return Q.ninvoke(db,'get',key);
 				},
 				close: function() {
 					return Q.ninvoke(db, 'close');

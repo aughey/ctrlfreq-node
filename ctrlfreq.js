@@ -26,15 +26,15 @@ function bytecheck(len) {
 	}
 	return function() {
 		bytespending -= len;
-	}
+	};
 }
 
+var filecache = {};
 try {
-	throw new Error('');
-	var filecache = JSON.parse(fs.readFileSync("cache.json"));
-	console.log("Loaded filecache")
+	//filecache = JSON.parse(fs.readFileSync("cache.json"));
+	//console.log("Loaded filecache");
 } catch (e) {
-	var filecache = {};
+	filecache = {};
 }
 var newcache = {};
 
@@ -44,7 +44,7 @@ function init(store) {
 	var filelimit = limit(10, "filelimit");
 	var readlimit = limit(100, "readlimit");
 
-	var emitter = new events.EventEmitter;
+	var emitter = new events.EventEmitter();
 
 	function processfile(fullpath, filename, stat) {
 		filecount++;
@@ -89,7 +89,7 @@ function init(store) {
 
 					function checkdone(error) {
 						outstanding -= 1;
-						if (outstanding == 0) {
+						if (outstanding === 0) {
 							filedone(error ? null : chunks);
 						}
 					}
@@ -104,7 +104,7 @@ function init(store) {
 								checkdone(true);
 								return;
 							}
-							if (bytesread == 0) {
+							if (bytesread === 0) {
 								fs.close(fd);
 								bufferdone();
 								checkdone();
@@ -123,8 +123,8 @@ function init(store) {
 								checkdone();
 							}).done();
 							readnext();
-						})
-					})
+						});
+					});
 
 				}
 
@@ -154,10 +154,10 @@ function init(store) {
 
 					try {
 						stats.push(Q.nfcall(fs.stat, fullpath).then(function(stat) {
-							var storestat = _.pick(stat, 'mode', 'uid', 'gid', 'size', 'mtime')
+							var storestat = _.pick(stat, 'mode', 'uid', 'gid', 'size', 'mtime');
 							storestat.mtime = storestat.mtime.toISOString();
 							if (err) {
-								console.log("Could not stat: " + fullpath)
+								console.log("Could not stat: " + fullpath);
 								return;
 							}
 							if (stat.isFile()) {
@@ -166,7 +166,7 @@ function init(store) {
 										name: file,
 										stat: storestat,
 										chunks: chunks
-									}
+									};
 								}));
 							} else if (stat.isDirectory()) {
 								delete storestat.size;
@@ -196,38 +196,38 @@ function init(store) {
 						Q.all(dirs).then(function(dirs) {
 							deferred.resolve({
 								dirs: _.sortBy(dirs, function(d) {
-									return d.name
+									return d.name;
 								}),
 								files: _.sortBy(files, function(f) {
-									return f.name
+									return f.name;
 								})
-							})
-						}).done()
-					}).done()
-				}).done()
+							});
+						}).done();
+					}).done();
+				}).done();
 			});
-		})
+		});
 		return deferred.promise;
 	}
 
 	return {
 		processdir: processdir,
 		emitter: emitter
-	}
+	};
 }
 
 function standalone() {
 	var args = process.argv;
-	args.shift()
-	args.shift()
+	args.shift();
+	args.shift();
 
 	Q.nfcall(levelup, dbpath).then(function(d) {
 		db = d; // Setting the global db
 		return Q.all(_.map(args, function(dirpath) {
-			console.log("Kicking off processing: " + dirpath)
+			console.log("Kicking off processing: " + dirpath);
 			dirpath = path.resolve(dirpath);
 			return processdir(dirpath).then(function(result) {
-				console.log("done processing directory: " + dirpath)
+				console.log("done processing directory: " + dirpath);
 				var info = JSON.stringify(result, dirpath);
 				return save(info, null, "Top directory " + dirpath);
 			});
@@ -236,7 +236,7 @@ function standalone() {
 		console.log("Closing db ");
 
 	}).then(function() {
-		console.log("Database closed")
+		console.log("Database closed");
 		//return Q.ninvoke(levelup, 'repair', dbpath);
 	}).then(function() {
 		console.log("Directory Count: " + numberWithCommas(dircount));
@@ -259,9 +259,9 @@ module.exports = {
 		return {
 			emitter: bk.emitter,
 			promise: promise
-		}
+		};
 	},
 	saveCache: function() {
 		fs.writeFileSync('cache.json', JSON.stringify(newcache));
 	}
-}
+};

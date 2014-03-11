@@ -12,10 +12,18 @@ function create(shadb, raw) {
 			} else {
 				digest = hash.hash(buffer);
 			}
-			return raw.save_raw(digest,buffer).then(function(rawkey) {
-				console.log("rawkey = " + rawkey);
-				return digest;
+			return shadb.has(digest).then(function(doeshave) {
+				if(doeshave) {
+					return true;
+				} else {
+					return raw.save_raw(digest,buffer).then(function(rawkey) {
+						return shadb.put(digest,rawkey);
+					}).then(function() {
+						return digest;
+					});
+				}
 			});
+
 		},
 		close: function() {
 			return shadb.close().then(function() {

@@ -42,7 +42,7 @@ function create(dir) {
 			},
 			close: function() {
 				if(file) {
-					return Q.ninvoke(file,'close',file);
+					return Q.ninvoke(file,'end');
 				} else {
 					return Q.fcall(function() {
 

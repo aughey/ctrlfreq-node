@@ -5,6 +5,6 @@ module.exports = {
 	create: function(dir) {
 		return raw.create(dir).then(function(rawstore) {
 			return wrap.wrap(dir,rawstore);
-		})
+		});
 	}
-}
+};
