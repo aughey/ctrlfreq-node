@@ -4,6 +4,8 @@ var nullstore = require('./null_store');
 var ss = require('./segmented_store');
 var _ = require('underscore')
 var Q = require('q');
+var processfile_full = require("./processfile_full")
+var processfile_cache = require("./processfile_cache")
 
 var levelup = require('levelup');
 
@@ -14,12 +16,14 @@ args.shift();
 args.shift();
 
 var storetouse = ss;
+var processfile_cache = processfile_cache.init("cache.json",processfile_full.processfile);
+var processfile = processfile_cache
 
 var backups = [];
 storetouse.create(dbpath).then(function(store) {
 	_.each(args, function(dir) {
 		console.log("Backing up " + dir);
-		var backup = ctrlfreq.backup(dir, store);
+		var backup = ctrlfreq.backup(dir, store, processfile.processfile);
 		backup.emitter.on('file', function(file) {
 			console.log("Storing: " + file);
 		});
@@ -31,5 +35,7 @@ storetouse.create(dbpath).then(function(store) {
 	});
 }).then(function() {
 	console.log("db closed");
-	ctrlfreq.saveCache();
+	if(processfile_cache) {
+		processfile_cache.saveCache();
+	}
 }).done();
